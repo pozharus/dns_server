@@ -1,0 +1,48 @@
+[
+{
+    "$original": "bsfg.ru.", 
+    "$ttl": 3600,
+    "soa": {
+        "mname": "amber.ns.cloudflare.com.",
+        "rname": "dns.cloudflare.com.",
+        "serial": "2036725972",
+        "refresh": 10000,
+        "retry": 2400,
+        "expire": 604800,
+        "minimum": 3600
+    },
+    "ns": [
+        { "host": "amber.ns.cloudflare.com."},
+        { "host": "phil.ns.cloudflare.com."}
+    ],
+    "a": [
+        { "name": "@", "ttl": 300, "value": "104.21.74.246" },
+        { "name": "@", "ttl": 300, "value": "172.67.207.243" }
+    ]
+},
+{
+    "$original": "pikabu.ru.", 
+    "$ttl": 3600,
+    "soa": {
+        "mname": "ns1.fornex.com.",
+        "rname": "hostmaster.fornex.com.",
+        "serial": "2615808023",
+        "refresh": 46800,
+        "retry": 1800,
+        "expire": 3600000,
+        "minimum": 300
+    },
+    "ns": [
+        { "host": "ns4.fornex.com."},
+        { "host": "ns3.fornex.com."},
+        { "host": "ns1.fornex.com."},
+        { "host": "ns2.fornex.com."}
+    ],
+    "a": [
+        { "name": "pikabu.ru.", "ttl": 2403, "value": "5.187.1.183" },
+        { "name": "pikabu.ru.", "ttl": 2403, "value": "5.187.0.134" },
+        { "name": "pikabu.ru.", "ttl": 2403, "value": "185.26.98.252" },
+        { "name": "pikabu.ru.", "ttl": 2403, "value": "91.228.155.121" }
+    ]
+}
+] 
