@@ -9,7 +9,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((ip, port))
 
 def load_zones():
-    
+
     jsonObjs = {} #array with dictionaries
     with open('dns.json') as dnsObjs:
         jsonObjs = json.load(dnsObjs)
@@ -60,7 +60,7 @@ def getquestiondomain(data):
     y = 0 # iterator to the end of data field
     for byte in data:
         if state == 1:
-            if byte != 0:
+            if byte != 0: #check that it's not first (empty) byte
                 domainstring += chr(byte)
             x += 1
             if x == expectedlength:
@@ -73,7 +73,7 @@ def getquestiondomain(data):
                 break
         else:
             state = 1
-            expectedlength = byte
+            expectedlength = byte #first byte - empty
         y += 1
 
     questiontype = data[y:y+2]
@@ -110,7 +110,7 @@ def buildquestion(domainname, rectype):
     if rectype == 'a':
         qbytes += (1).to_bytes(2, byteorder='big')
         
-    qbytes += (1).to_bytes(2, byteorder="big")
+    qbytes += (1).to_bytes(2, byteorder='big')
 
     return qbytes
 
@@ -155,7 +155,7 @@ def buildresponse(data):
     ARCOUNT = (0).to_bytes(2, byteorder='big')
 
     dnsheader = TransactionID+Flags+QDCOUNT+ANCOUNT+NSCOUNT+ARCOUNT
-
+    
     #Create DNS body
     dnsbody = b''
 
