@@ -44,5 +44,52 @@
         { "name": "pikabu.ru.", "ttl": 2403, "value": "185.26.98.252" },
         { "name": "pikabu.ru.", "ttl": 2403, "value": "91.228.155.121" }
     ]
+},
+{
+    "$original": "habr.com.", 
+    "$ttl": 3600,
+    "soa": {
+        "mname": "ns1.habradns.net.",
+        "rname": "nsmaster.habralab.ru.",
+        "serial": "2021031201",
+        "refresh": 3600,
+        "retry": 900,
+        "expire": 1209600,
+        "minimum": 3600
+    },
+    "ns": [
+        { "host": "ns1.habradns.net."},
+        { "host": "ns2.habradns.net."},
+        { "host": "ns3.habradns.net."}
+    ],
+    "a": [
+        { "name": "habr.com.", "ttl": 1509, "value": "178.248.237.68" }
+    ]
+},
+{
+    "$original": "linkedin.com.", 
+    "$ttl": 3600,
+    "soa": {
+        "mname": "ns1.p43.dynect.net.",
+        "rname": "hostmaster.linkedin.com.",
+        "serial": "2021040603",
+        "refresh": 3600,
+        "retry": 600,
+        "expire": 604800,
+        "minimum": 300
+    },
+    "ns": [
+        { "host": "dns1.p09.nsone.net."},
+        { "host": "dns2.p09.nsone.net."},
+        { "host": "dns3.p09.nsone.net."},
+        { "host": "dns4.p09.nsone.net."},
+        { "host": "ns1.p43.dynect.net."},
+        { "host": "ns2.p43.dynect.net."},
+        { "host": "ns3.p43.dynect.net."},
+        { "host": "ns4.p43.dynect.net."}
+    ],
+    "a": [
+        { "name": "linkedin.com.", "ttl": 87, "value": "13.107.42.14" }
+    ]
 }
 ] 

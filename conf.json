@@ -1,0 +1,10 @@
+{
+    "ip": "127.0.0.1", 
+    "port": 53,
+    "ip_master": "1.1.1.1",
+    "port_master": 53,
+    "blacklist": [
+        { "domain": "habr.com."},
+        { "domain": "linkedin.com."}
+    ]
+}
