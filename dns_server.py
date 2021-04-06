@@ -1,178 +1,215 @@
 import socket
-import glob
 import json
+import sys
 
-port = 53 #default DNS operation port
-ip = '127.0.0.1' #localhost IP
+class DNS_server:
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((ip, port))
+    # Default parameters
+    ip = '127.0.0.1'
+    port = 53
+    # Map for storing JSON objects that represent zone info
+    # key(domain-name) -> value(object)
+    zone_data = {}
+     
+    def __init__(self):
+        # Get parameters from cmd if it puts
+        if len(sys.argv) > 1:
+            self.ip = sys.argv[1]
+            self.port = sys.argv[2]    
+            
+        self.loadZones()
 
-def load_zones():
-
-    jsonObjs = {} #array with dictionaries
-    with open('dns.json') as dnsObjs:
-        jsonObjs = json.load(dnsObjs)
-
-    zones = {} #array with json objects with key->"$original"
-
-    for item in jsonObjs:
-        for key in item:
-            zonename = item["$original"]
-            zones[zonename] = item
-            break
-
-    return zones
-
-zonedata = load_zones()
-
-#   Build flags for DNS response
-#   params: [bytes] 2 bytes offset from DNS query
-#   return: [string] 2 bytes of flags sections 
-def getflags(flags):
-
-    byte1 = bytes(flags[:1])
-    byte2 = bytes(flags[1:2])
-
-    #Byte 1
-    QR = '1'
-    OPCODE = ''
-    for bit in range(1,5):
-        OPCODE += str(ord(byte1)&(1<<bit))
-    AA = '1'
-    TC = '0'
-    RD = '0'
-
-    #Byte 2
-    RA = '0'
-    Z = '000'
-    RCODE = '0000'
-
-    return int(QR+OPCODE+AA+TC+RD, 2).to_bytes(1, byteorder='big') + int(RA+Z+RCODE, 2).to_bytes(1, byteorder='big')
-
-def getquestiondomain(data):
-    
-    state = 0
-    expectedlength = 0
-    domainstring = ''
-    domainparts = []
-    x = 0
-    y = 0 # iterator to the end of data field
-    for byte in data:
-        if state == 1:
-            if byte != 0: #check that it's not first (empty) byte
-                domainstring += chr(byte)
-            x += 1
-            if x == expectedlength:
-                domainparts.append(domainstring)
-                domainstring = ''
-                state = 0
-                x = 0
-            if byte == 0: # if we iterate to end of string (0x00 byte)
-                domainparts.append(domainstring)
-                break
-        else:
-            state = 1
-            expectedlength = byte #first byte - empty
-        y += 1
-
-    questiontype = data[y:y+2]
-
-    return (domainparts, questiontype)
-
-def getzone(domain):
-    global zonedata
-
-    zone_name = '.'.join(domain)
-    return zonedata[zone_name]
-
-def getrecs(data):
-    domain, questiontype = getquestiondomain(data)
-
-    qt = ''
-    if questiontype == b'\x00\x01':
-        qt = 'a'
-    
-    zone = getzone(domain)
-
-    return (zone[qt], qt, domain)
-
-def buildquestion(domainname, rectype):
-    qbytes = b''
-
-    for part in domainname:
-        length = len(part)
-        qbytes += bytes([length])
-
-        for char in part:
-            qbytes += ord(char).to_bytes(1, byteorder='big')
-
-    if rectype == 'a':
-        qbytes += (1).to_bytes(2, byteorder='big')
+    def loadZones(self):
         
-    qbytes += (1).to_bytes(2, byteorder='big')
+        jsonObjs = {} #array with dictionaries
+        with open('dns.json') as dnsObjs:
+            jsonObjs = json.load(dnsObjs)
 
-    return qbytes
+        zones = {} #array with json objects with key->"$original"
 
-def rectobytes(domainname, rectype, recttl, recval):
-    
-    rbytes = b'\xc0\x0c'
+        for item in jsonObjs:
+            for key in item:
+                zonename = item["$original"]
+                zones[zonename] = item
+                break
 
-    if rectype == 'a':
-        rbytes = rbytes + bytes([0]) + bytes([1])
+        self.zone_data = zones
 
-    rbytes = rbytes + bytes([0]) + bytes([1])
+    def getFlags(self, data):
+        # byte1:
+        # QR (1 bit)
+        QR = '1'
+        # Opcode (4 bit)
+        byte1 = data[:1]
+        Opcode = ''
+        for bit in range(1,5):
+            Opcode += str(ord(byte1)&(1<<bit)) # Copyright - https://youtu.be/4I9LEY-q-co
+        # AA (1bit)
+        AA = '1'
+        # TC (1 bit)
+        TC = '0'
+        # RD (1 bit)
+        RD = '0'
 
-    rbytes += int(recttl).to_bytes(4, byteorder="big")
+        # byte2:
+        # RA (1 bit)
+        RA = '0'
+        # Z (3 bit)
+        Z = '000'
+        # RCODE (4 bit)
+        RCODE = '0000'
 
-    if rectype == 'a':
-        rbytes = rbytes + bytes([0]) + bytes([4])
+        res_byte1 = int(QR+Opcode+AA+TC+RD, 2).to_bytes(1, byteorder='big')
+        res_byte2 = int(RA+Z+RCODE, 2).to_bytes(1, byteorder='big')
 
-        for part in recval.split('.'):
-            rbytes += bytes([int(part)])
-    
-    return rbytes
+        return res_byte1 + res_byte2
 
-#Build DNS response
-def buildresponse(data):
-    
-    #Transactions ID [0-1 bytes]
-    TransactionID = data[:2] #Array with 2 bytes of ID DNS-header
+    def getQuestionDomain(self, data):
+        domain_parts = []
+        domain_part = ''
+        empty_byte = ''
+        it = 0
+        it_end_dmn = 0
+        flag = 0
 
-    #Get the flags [2-3 bytes]
-    Flags = getflags(data[2:4])
+        for byte in data:
+            if flag == 1:
+                if byte != 0:
+                    # not empty
+                    domain_part += chr(byte)
+                it += 1
+                if it == empty_byte:
+                    domain_parts.append(domain_part)
+                    domain_part = ''
+                    flag = 0
+                    it = 0  
+                if byte == 0:
+                    # iterate to end of domain msg (0x00 byte)
+                    domain_parts.append(domain_part)
+                    break
+            else:
+                 # first byte - empty
+                flag = 1
+                empty_byte = byte 
 
-    #Question Count
-    QDCOUNT = b'\x00\x01'
+            it_end_dmn += 1
 
-    #Answer Count (count of strings in the one zone)
-    ANCOUNT = len(getrecs(data[12:])[0]).to_bytes(2, byteorder='big')
+        
 
-    #Nameserver Count
-    NSCOUNT = (0).to_bytes(2, byteorder='big')
+        #Qusestion type: first 2 bytes after domain bytes sequence
+        q_type = data[it_end_dmn:it_end_dmn+2]  # Copyright - https://youtu.be/4I9LEY-q-co
+        
+        return (domain_parts, q_type)      
 
-    #Additional Count
-    ARCOUNT = (0).to_bytes(2, byteorder='big')
+    def getZone(self, domain):
+        zone_name = '.'.join(domain) # Add '.' in the end domain-name
+        return self.zone_data[zone_name]
 
-    dnsheader = TransactionID+Flags+QDCOUNT+ANCOUNT+NSCOUNT+ARCOUNT
-    
-    #Create DNS body
-    dnsbody = b''
+    def getAnswersCount(self, data):
 
-    #Get answer for query
-    records, rectype, domainname = getrecs(data[12:])
-    
-    dnsquestion = buildquestion(domainname, rectype)
-    
-    for record in records:
-        dnsbody += rectobytes(domainname, rectype, record["ttl"], record["value"])
+        domain_parts, q_type = self.getQuestionDomain(data)
+        
+        QTYPE = ''
+        if q_type == b'\x00\x01':
+            QTYPE = 'a' # standart query for host resolving
+        
+        # Resolve zone using domain
+        zone = self.getZone(domain_parts)
+        return (zone['a'], QTYPE, domain_parts) 
 
-    return dnsheader + dnsquestion + dnsbody
+    def buildQuery(self, domain, q_type):
+        #TODO don't pass query type
+        q_bytes = b''
 
+        for part in domain:
+            length = len(part) #countity of chars in part of domain
+            #add length of part
+            q_bytes += bytes([length])
 
+            #Copyright https://youtu.be/4I9LEY-q-co
+            for char in part:
+            #add part like seq of chars cast to bytes
+                q_bytes += ord(char).to_bytes(1, byteorder='big')
+
+        if q_type == 'a':
+            # QTYPE
+            q_bytes += (1).to_bytes(2, byteorder='big')
+
+        # QCLASS
+        q_bytes += (1).to_bytes(2, byteorder='big')
+
+        return q_bytes
+
+    def recordToBytes(self, domain, query_type, query_ttl, query_addr):
+
+        #Copyright https://youtu.be/4I9LEY-q-co
+        query_bytes = b'\xc0\x0c'
+
+        if query_type == 'a':
+            query_bytes = query_bytes + bytes([0]) + bytes([1])
+
+        query_bytes = query_bytes + bytes([0]) + bytes([1])
+
+        query_bytes += int(query_ttl).to_bytes(4, byteorder='big')
+
+        if query_type == 'a':
+            query_bytes = query_bytes + bytes([0]) + bytes([4])
+        
+            for part in query_addr.split('.'):
+                query_bytes += bytes([int(part)])
+
+        return query_bytes
+
+    def buildResponse(self, data):
+        # ID (16 bit)
+        qr_id = data[:2]
+        
+        # Flags (16 bit)
+        flags = self.getFlags(data[2:4])
+        
+        # QDCOUNT (16 bits)
+        QDCOUNT = b'\x00\x01'
+        # ANCOUNT (16 bits)
+        ANCOUNT = len(self.getAnswersCount(data[12:])[0]).to_bytes(2, byteorder='big') #Copyright https://youtu.be/4I9LEY-q-co
+        # NSCOUNT (16 bits)
+        NSCOUNT = (0).to_bytes(2, byteorder='big')
+        # ARCOUNT (16 bits)
+        ARCOUNT = (0).to_bytes(2, byteorder='big')
+
+        dns_header = qr_id + flags + QDCOUNT + ANCOUNT + NSCOUNT + ARCOUNT
+        
+        #DNS body
+        dns_body = b''
+
+        #Get answer for query
+        a_records, q_type, domain = self.getAnswersCount(data[12:])
+
+        dns_question = self.buildQuery(domain, q_type)
+        
+        for record in a_records:
+            dns_body += self.recordToBytes(domain, q_type, record["ttl"], record["value"])
+
+        return dns_header + dns_question + dns_body
+
+server = DNS_server()
+print("Starting DNS server " + str(server.ip) 
+      + " on port: " + str(server.port))
+
+# Open socket
+try: 
+    sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sck.bind((server.ip, server.port))
+except OSError as msg:
+    print("The socket can't be open")
+    sck.close()
+
+# Run server
 while 1:
-    data, addr = sock.recvfrom(512) #UDP msg length (bytes)
-    r = buildresponse(data)
-    sock.sendto(r, addr)
+    # Get query from dig socket
+    data, addr = sck.recvfrom(512) #UDP msg length
 
+    # Build response on the received query
+    response = server.buildResponse(data)
 
+    # Send response to dig socket
+    sck.sendto(response, addr)
