@@ -94,8 +94,6 @@ class DNS_server:
 
             it_end_dmn += 1
 
-        
-
         #Qusestion type: first 2 bytes after domain bytes sequence
         q_type = data[it_end_dmn:it_end_dmn+2]  # Copyright - https://youtu.be/4I9LEY-q-co
         
