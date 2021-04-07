@@ -1,5 +1,12 @@
 import socket
 import json
+import dnslib
+
+#dig @127.0.0.1 pikabu.ru 
+#dig @127.0.0.1 facebook.com
+#dig @127.0.0.1 habr.com 
+#dig @127.0.0.1 habr.com TXT
+#dig linkedin.com @127.0.0.1 && dig linkedin.com @127.0.0.1 TXT
 
 class DNS_server:
 
@@ -12,7 +19,7 @@ class DNS_server:
     # key(domain-name) -> value(object)
     zone_data = {}
     blacklist_domains = {}
-    blklst_response = ""
+    blklst_response = 'default'
     # DNS record from master server
     master_zndata = b''
      
@@ -39,7 +46,7 @@ class DNS_server:
         self.port = json_obj["port"]
         self.ip_master = json_obj["ip_master"]
         self.port_master = json_obj["port_master"]
-        self.blklst_response = json_obj["blcklst_response"]
+        self.blklst_response = json_obj["blacklist_message"]
         self.blacklist_domains = json_obj["blacklist"]
 
     # Load DNS file with zones that represends JSON objects
@@ -133,7 +140,6 @@ class DNS_server:
 
         #Qusestion type: first 2 bytes after domain bytes sequence
         q_type = data[it_end_dmn:it_end_dmn+2]  # Copyright - https://youtu.be/4I9LEY-q-co
-        
         return (domain_parts, q_type)      
 
     # Return master server dns response on the quering domen_name
@@ -142,12 +148,11 @@ class DNS_server:
     def getZoneMaster(self, domain):
         
         # Copyright example https://stackoverflow.com/a/56129114
-        from dnslib import DNSRecord
         forward_addr = (self.ip_master, self.port_master) # Master server dns and port
 
         try:
             client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
-            query = DNSRecord.question(domain)
+            query = dnslib.DNSRecord.question(domain)
             client.sendto(bytes(query.pack()), forward_addr)
             data, _ = client.recvfrom(512)
             return data
@@ -185,16 +190,23 @@ class DNS_server:
         QTYPE = ''
         if q_type == b'\x00\x01':
             QTYPE = 'a' # standart query for host resolving
-        
+        if q_type == b'\x00\x10':
+            QTYPE = "TXT" # TXT query
+
         # Resolve zone using domain
         zone, flag = self.getZone(domain_parts)
+
+        # Resolve DNS record type
         if bool(zone):
-            return (zone['a'], QTYPE, domain_parts, flag)
+            if QTYPE == 'a':
+                return (zone['a'], QTYPE, domain_parts, flag)
+            else:
+                # for TXT type
+                return ({}, QTYPE, domain_parts, flag)
         else:
             #If zone not found locally
             return ({}, QTYPE, domain_parts, flag)
-         
-
+          
     # Build DNS query
     # params: list of domain parts, query type
     # return: dns query that contains from domain_lenght, parts, in bytes
@@ -214,50 +226,87 @@ class DNS_server:
         if q_type == 'a':
             # QTYPE
             q_bytes += (1).to_bytes(2, byteorder='big')
+        if q_type == 'TXT':
+            # QTYPE - TXT
+            q_bytes += b'\x00\x10'
 
         # QCLASS
         q_bytes += (1).to_bytes(2, byteorder='big')
-
+        
         return q_bytes
 
 
     # Convert DNS body in bytes
     # params: str(type of quey), ttl(int), str(ip) addr
     # return: querying record in bytes
+    # Use with A-responses. With TXT-responses not working, in this case using dnslib
     def recordToBytes(self, query_type, query_ttl, query_addr):
-
         #Copyright https://youtu.be/4I9LEY-q-co
+
+        # Pointer do domain
         query_bytes = b'\xc0\x0c'
 
+        # Response type
         if query_type == 'a':
             query_bytes = query_bytes + bytes([0]) + bytes([1])
+        else:
+            query_bytes = query_bytes + bytes([0]) + bytes([10])
 
+        # CLASS
         query_bytes = query_bytes + bytes([0]) + bytes([1])
 
-        query_bytes += int(query_ttl).to_bytes(4, byteorder='big')
-
+        # TTL
         if query_type == 'a':
+            query_bytes += int(query_ttl).to_bytes(4, byteorder='big')
+        else:
+            query_bytes += int(255).to_bytes(4, byteorder='big')
+
+        #RDLENGTH + RDATA    
+        if query_type == 'a':
+            #RDLENGTH
             query_bytes = query_bytes + bytes([0]) + bytes([4])
-        
+
+            #RDATA
             for part in query_addr.split('.'):
                 query_bytes += bytes([int(part)])
+        else: 
+            #RDLENGTH
+            RDLENGTH = len(query_addr)
+            query_bytes += query_bytes + (0).to_bytes(2, byteorder='big')
+            query_bytes += RDLENGTH.to_bytes(2, byteorder='big')
+
+            #RDATA
+            query_bytes += RDLENGTH.to_bytes(2, byteorder='big')
+            query_bytes += bytes(query_addr, 'utf-8')
 
         return query_bytes
+    
+    # Return DNS package-response on socket query with TXT section
+    # param: bytes of is socket-query, list with domain parts
+    # return: dns package in bytes
+    def txtAnswrDNS(self, query_id, domain_parts):
+        # Get full domain
+        domain_str = '.'.join(domain_parts)
 
-    # Return incorrect DNS body with msg for client
-    def buildIncorrBody(self):
-        dns_body = b'\xc0\x0c'
+        # Build TXT DNS answer
+        q = int.from_bytes(query_id, byteorder='big')        
 
-        for char in self.blklst_response:
-            dns_body += bytes(char, 'utf-8')
+        header = dnslib.DNSHeader(id=q, qr=1,aa=1, ra=1) 
+        question = dnslib.DNSQuestion(domain_str, 16)
+        body = dnslib.RR(domain_str, rtype = 16, rdata=dnslib.TXT(self.blklst_response))
 
-        return dns_body
-            
+        # Build full package
+        dns = dnslib.DNSRecord()
+        dns.header = header
+        dns.question = question
+        dns.rr.append(body)
+        
+        return dns.pack()
+
     # Build respone in DNS query
     # params: sequence of bytes
     # return: DNS packages that consist of: dns header, question, body 
     def buildResponse(self, data):
-
         #Flag what tells about domain name status
         blcklst_flag = False
 
@@ -270,16 +319,22 @@ class DNS_server:
         # QDCOUNT (16 bits)
         QDCOUNT = b'\x00\x01'
         # ANCOUNT (16 bits)
-        ANCOUNT = len(self.getAnswersCount(data[12:])[0]).to_bytes(2, byteorder='big') #Copyright https://youtu.be/4I9LEY-q-co
+        ANCOUNT = b''
+        if not bool(len(self.getAnswersCount(data[12:])[0])):
+            #if getAnswersCount() return empty dic
+            ANCOUNT = b'\x00\x01'
+        else:
+            ANCOUNT = len(self.getAnswersCount(data[12:])[0]).to_bytes(2, byteorder='big') #Copyright https://youtu.be/4I9LEY-q-co
+
         # NSCOUNT (16 bits)
         NSCOUNT = (0).to_bytes(2, byteorder='big')
         # ARCOUNT (16 bits)
         ARCOUNT = (0).to_bytes(2, byteorder='big')
 
         #Get answer for query
-        a_records, q_type, domain, blcklst_flag = self.getAnswersCount(data[12:])
-
-        if not bool(a_records):
+        records, q_type, domain, blcklst_flag = self.getAnswersCount(data[12:])
+        
+        if not bool(records) and blcklst_flag == False:
             # Searching domain not found in local DNS records. Return DNS package from  master server
             
             # Rewrite 2 first bytes in pckg from master server for correct client response
@@ -290,27 +345,34 @@ class DNS_server:
             return self.master_zndata
 
         if blcklst_flag:
-            #Rewrite DNS header flags
+            #Rewrite DNS header flags if domain in blacklist
             flags = self.getFlags(data[2:4], blcklst_flag)
         
         # Build DNS headers
         dns_header = qr_id + flags + QDCOUNT + ANCOUNT + NSCOUNT + ARCOUNT
 
-        # Build DNS query
-        dns_question = self.buildQuery(domain, q_type)
-
         if blcklst_flag:
-            # Build DNS package for blacklist domain query    
-            dns_body = self.buildIncorrBody()
-            domain_str = '.'.join(domain)
-            print(self.blklst_response + ' ' + domain_str)
-            return dns_header + dns_question + dns_body
+             # Server console print    
+            print(self.blklst_response + ' ' + '.'.join(domain)) 
+
+            # Build DNS package for blacklist domain query
+            dns_question = self.buildQuery(domain, q_type)
+            dns_body = b''
+            if q_type == 'a':   
+                # Build A DNS body
+                dns_body = self.recordToBytes(q_type, 0, "0.0.0.0")
+                return dns_header + dns_question + dns_body
+            else:
+                return self.txtAnswrDNS(qr_id, domain) 
         else:
             # Build normal DNS package
             
+            # Build A DNS query
+            dns_question = self.buildQuery(domain, q_type)
+
             # Build DNS body
             dns_body = b''
-            for record in a_records:
+            for record in records:
                 dns_body += self.recordToBytes(q_type, record["ttl"], record["value"])
 
             return dns_header + dns_question + dns_body

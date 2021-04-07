@@ -7,5 +7,5 @@
         { "domain": "habr.com."},
         { "domain": "linkedin.com."}
     ],
-    "blcklst_response": "Not resolved"
+    "blacklist_message": "Not resolved"
 }
