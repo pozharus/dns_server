@@ -6,5 +6,6 @@
     "blacklist": [
         { "domain": "habr.com."},
         { "domain": "linkedin.com."}
-    ]
+    ],
+    "blcklst_response": "Not resolved"
 }

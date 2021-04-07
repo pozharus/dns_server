@@ -1,26 +1,5 @@
 [
 {
-    "$original": "bsfg.ru.", 
-    "$ttl": 3600,
-    "soa": {
-        "mname": "amber.ns.cloudflare.com.",
-        "rname": "dns.cloudflare.com.",
-        "serial": "2036725972",
-        "refresh": 10000,
-        "retry": 2400,
-        "expire": 604800,
-        "minimum": 3600
-    },
-    "ns": [
-        { "host": "amber.ns.cloudflare.com."},
-        { "host": "phil.ns.cloudflare.com."}
-    ],
-    "a": [
-        { "name": "@", "ttl": 300, "value": "104.21.74.246" },
-        { "name": "@", "ttl": 300, "value": "172.67.207.243" }
-    ]
-},
-{
     "$original": "pikabu.ru.", 
     "$ttl": 3600,
     "soa": {

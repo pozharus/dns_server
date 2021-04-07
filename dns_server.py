@@ -1,6 +1,5 @@
 import socket
 import json
-import sys
 
 class DNS_server:
 
@@ -9,11 +8,11 @@ class DNS_server:
     port = 0
     ip_master = ''
     port_master = 0
-
     # Map for storing JSON objects that represent zone info
     # key(domain-name) -> value(object)
     zone_data = {}
     blacklist_domains = {}
+    blklst_response = ""
     # DNS record from master server
     master_zndata = b''
      
@@ -26,25 +25,32 @@ class DNS_server:
         self.loadZones()
     
     # Load default settings
-    # TODO: Not resolving msd from conf.json
     def loadSettings(self):
         # Open JSON file
         json_obj = {}
-        with open('conf.json') as conf:
-            json_obj = json.load(conf)
+        try:
+            with open('conf.json') as conf:
+                json_obj = json.load(conf)
+        except IOError:
+            print("[Error!] Can't open config file")
+
         # Parse fields
         self.ip = json_obj["ip"]
         self.port = json_obj["port"]
         self.ip_master = json_obj["ip_master"]
         self.port_master = json_obj["port_master"]
+        self.blklst_response = json_obj["blcklst_response"]
         self.blacklist_domains = json_obj["blacklist"]
 
     # Load DNS file with zones that represends JSON objects
     def loadZones(self):
         
         json_objs = {} #array with dictionaries
-        with open('dns.json') as dns_objs:
-            json_objs = json.load(dns_objs)
+        try:
+            with open('dns.json') as dns_objs:
+                json_objs = json.load(dns_objs)
+        except IOError:
+            print("[Eror!] Can't open local DNS zone file")
 
         zones = {} #array with json objects with key->"$original"
 
@@ -135,6 +141,7 @@ class DNS_server:
     # return: seq of bytes with dns response (but with non-correct ID)
     def getZoneMaster(self, domain):
         
+        # Copyright example https://stackoverflow.com/a/56129114
         from dnslib import DNSRecord
         forward_addr = (self.ip_master, self.port_master) # Master server dns and port
 
@@ -143,12 +150,12 @@ class DNS_server:
             query = DNSRecord.question(domain)
             client.sendto(bytes(query.pack()), forward_addr)
             data, _ = client.recvfrom(512)
+            return data
         except OSError as msg:
-            print("[Error!] Socket to master server can't be open" + str(msg, 'utf-8'))
+            print("[Error!] Socket to master server can't be open")
 
-        return data
 
-    # Return DNS record by the domain name
+    # Return DNS record by the domain name and blacklist status
     # params: list with domain parts 
     # return: json object by the domain key and flag-vars that check domain in blacklist
     def getZone(self, domain):
@@ -166,7 +173,7 @@ class DNS_server:
         else:
             #If record not find in dns.json need request to 1.1.1.1 and get info
             self.master_zndata = self.getZoneMaster(zone_name)
-            return ({}, in_blacklist) # return empty dic that mens that record not search locally 
+            return ({}, in_blacklist) # return empty dic that means that record not search locally 
 
     # Return params for ANCOUNT and DNS query
     # params: [12:) DNS query offset in bytes
@@ -184,6 +191,7 @@ class DNS_server:
         if bool(zone):
             return (zone['a'], QTYPE, domain_parts, flag)
         else:
+            #If zone not found locally
             return ({}, QTYPE, domain_parts, flag)
          
 
@@ -236,6 +244,15 @@ class DNS_server:
 
         return query_bytes
 
+    # Return incorrect DNS body with msg for client
+    def buildIncorrBody(self):
+        dns_body = b'\xc0\x0c'
+
+        for char in self.blklst_response:
+            dns_body += bytes(char, 'utf-8')
+
+        return dns_body
+            
     # Build respone in DNS query
     # params: sequence of bytes
     # return: DNS packages that consist of: dns header, question, body 
@@ -284,16 +301,9 @@ class DNS_server:
 
         if blcklst_flag:
             # Build DNS package for blacklist domain query    
-            
-            # Build DNS body with message for client
-            dns_body = b'\xc0\x0c'
-
-            msg = "Not resolved"
-            for char in msg:
-                dns_body += bytes(char, 'utf-8')
-
+            dns_body = self.buildIncorrBody()
             domain_str = '.'.join(domain)
-            print("Not resolved: " + domain_str)
+            print(self.blklst_response + ' ' + domain_str)
             return dns_header + dns_question + dns_body
         else:
             # Build normal DNS package
@@ -313,7 +323,7 @@ try:
     sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sck.bind((server.ip, server.port))
 except OSError as msg:
-    print("[Error!] The socket can't be open" + str(msg, 'utf-8'))
+    print("[Error!] The socket can't be open")
     sck.close()
 
 # Run server
