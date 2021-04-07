@@ -5,8 +5,9 @@ import dnslib
 #dig @127.0.0.1 pikabu.ru 
 #dig @127.0.0.1 facebook.com
 #dig @127.0.0.1 habr.com 
-#dig @127.0.0.1 habr.com TXT
-#dig linkedin.com @127.0.0.1 && dig linkedin.com @127.0.0.1 TXT
+#dig @127.0.0.1 linkedin.com
+#dig @127.0.0.1 habr.com TXT habr.com A
+#dig @127.0.0.1 linkedin.com TXT linkedin.com A
 
 class DNS_server:
 
