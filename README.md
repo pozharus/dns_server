@@ -11,8 +11,8 @@ If port are beasy use this guide to free it:
 https://andreyex.ru/ubuntu/kak-osvobodit-port-53-ispolzuemyj-systemd-resolved-v-ubuntu/
 
 Conf python & start server: 
-sudo pip3 install dnslib
-sudo python3 dns_server.py
+sudo pip3 install dnslib ;
+sudo python3 dns_server.py ;
 
 Examples of queries:
 dig @127.0.0.1 pikabu.ru ;
