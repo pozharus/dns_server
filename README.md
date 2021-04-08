@@ -1,12 +1,12 @@
 # How to use
 
 Structure:
-conf.json - file with configuration of server
-dns.json - DNS zones file
-dns_server.py - server
+conf.json - file with configuration of server;
+dns.json - DNS zones file;
+dns_server.py - server;
 
 System configuration:
-Using 127.0.0.1#53 adress in conf.json
+Using 127.0.0.1#53 adress in conf.json;
 If port are beasy use this guide to free it:
 https://andreyex.ru/ubuntu/kak-osvobodit-port-53-ispolzuemyj-systemd-resolved-v-ubuntu/
 
