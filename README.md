@@ -1,5 +1,4 @@
-# dns_server
-How to use:
+# How to use
 
 Structure:
 conf.json - file with configuration of server
